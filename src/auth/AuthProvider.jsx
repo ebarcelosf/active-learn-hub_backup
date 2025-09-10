@@ -1,51 +1,55 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getStoredUsers, saveStoredUsers, getCurrentUser, setCurrentUser } from './storage';
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import storageService from '../services/StorageService'
 
-const AuthContext = createContext(null);
+const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => getCurrentUser());
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setCurrentUser(user);
-  }, [user]);
+    const initAuth = async () => {
+      await storageService.init()
+      const currentUser = await storageService.getCurrentUser()
+      setUser(currentUser)
+      setLoading(false)
+    }
+    
+    initAuth()
+  }, [])
 
-  function login(email, password) {
-    const users = getStoredUsers();
-    const found = users.find(u => u.email === (email || '').trim().toLowerCase());
-    if (!found) throw new Error('Usuário não encontrado. Verifique o email ou cadastre-se.');
-    if (found.password !== password) throw new Error('Senha incorreta.');
-
-    const publicUser = { name: found.name, email: found.email, role: found.role };
-    setUser(publicUser);
-    return publicUser;
+  async function login(email, password) {
+    try {
+      const user = await storageService.login(email, password)
+      setUser(user)
+      return user
+    } catch (error) {
+      throw error
+    }
   }
 
-  function signup({ name, email, password, role = 'Aluno' }) {
-    const users = getStoredUsers();
-    const normEmail = (email || '').trim().toLowerCase();
-    if (users.some(u => u.email === normEmail)) throw new Error('Já existe uma conta com esse email.');
-
-    const toStore = { name: name.trim(), email: normEmail, password, role };
-    users.push(toStore);
-    saveStoredUsers(users);
-
-    const publicUser = { name: toStore.name, email: toStore.email, role: toStore.role };
-    setUser(publicUser);
-    return publicUser;
+  async function signup(userData) {
+    try {
+      const user = await storageService.signup(userData)
+      setUser(user)
+      return user
+    } catch (error) {
+      throw error
+    }
   }
 
-  function logout() {
-    setUser(null);
+  async function logout() {
+    await storageService.logout()
+    setUser(null)
   }
 
-  const value = { user, login, signup, logout };
+  const value = { user, login, signup, logout, loading }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
+  return ctx
 }
